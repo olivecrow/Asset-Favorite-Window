@@ -2,7 +2,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace RoF.AssetFavoriteWindow.Editor
+namespace FavoriteAssetsWindow
 {
     public class ThumbnailSettingsPopup : EditorWindow
     {

@@ -4,11 +4,11 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace RoF.AssetFavoriteWindow.Editor
+namespace FavoriteAssetsWindow
 {
     public static class ThumbnailController
     {
-        const string PATH_THUMBNAILS = "Assets/Editor/AFW Thumbnails";
+        const string PATH_THUMBNAILS = "Assets/Editor/FavoriteAssetsThumbnails";
         public static Texture2D TakePrefabThumbnail(GameObject prefab, ThumbnailSettings settings)
         {
             if (prefab == null)
@@ -99,17 +99,17 @@ namespace RoF.AssetFavoriteWindow.Editor
 
         public static void SaveThumbnail(Object asset, Texture2D thumbnail)
         {
-            if(AFW_Data.instance.TryGetDetail(asset, out var detail))
+            if(FavoriteAssetsData.instance.TryGetDetail(asset, out var detail))
             {
                 if(detail.thumbnail) AssetDatabase.RemoveObjectFromAsset(detail.thumbnail);
             }
             else
             {
-                detail = new AFW_AssetDetail
+                detail = new AssetDetail
                 {
                     guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(asset))
                 };
-                AFW_Data.instance.AppendDetail(asset, detail);
+                FavoriteAssetsData.instance.AppendDetail(asset, detail);
             }
             EnsureFolderExists(PATH_THUMBNAILS);
             thumbnail.name = $"{asset.name}_{detail.guid}_Thumbnail";
@@ -117,7 +117,7 @@ namespace RoF.AssetFavoriteWindow.Editor
             detail.thumbnail = thumbnail;
             
             AssetDatabase.CreateAsset(thumbnail, path);
-            AFW_Data.instance.Save();
+            FavoriteAssetsData.instance.Save();
         }
         
         /// <summary>

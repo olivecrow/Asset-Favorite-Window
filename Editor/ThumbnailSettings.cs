@@ -1,22 +1,22 @@
 ﻿using UnityEditor;
 using UnityEngine;
 
-namespace RoF.AssetFavoriteWindow.Editor
+namespace FavoriteAssetsWindow
 {
     public class ThumbnailSettings
     {
         // EditorPrefs keys
-        private const string LightDirXKey = "AFW_Thumbnail_LightDirX";
-        private const string LightDirYKey = "AFW_Thumbnail_LightDirY";
-        private const string LightDirZKey = "AFW_Thumbnail_LightDirZ";
-        private const string LightIntensityKey = "AFW_Thumbnail_LightIntensity";
-        private const string ReflectionIntensityKey = "AFW_Thumbnail_ReflectionIntensity";
-        private const string SizeXKey = "AFW_Thumbnail_SizeX";
-        private const string SizeYKey = "AFW_Thumbnail_SizeY";
-        private const string ObjectRotationXKey = "AFW_Thumbnail_ObjectRotationX";
-        private const string ObjectRotationYKey = "AFW_Thumbnail_ObjectRotationY";
-        private const string ObjectRotationZKey = "AFW_Thumbnail_ObjectRotationZ";
-        private const string CameraFovKey = "AFW_Thumbnail_CameraFOV";
+        private const string LightDirXKey = "FavoriteAssets_Thumbnail_LightDirX";
+        private const string LightDirYKey = "FavoriteAssets_Thumbnail_LightDirY";
+        private const string LightDirZKey = "FavoriteAssets_Thumbnail_LightDirZ";
+        private const string LightIntensityKey = "FavoriteAssets_Thumbnail_LightIntensity";
+        private const string ReflectionIntensityKey = "FavoriteAssets_Thumbnail_ReflectionIntensity";
+        private const string SizeXKey = "FavoriteAssets_Thumbnail_SizeX";
+        private const string SizeYKey = "FavoriteAssets_Thumbnail_SizeY";
+        private const string ObjectRotationXKey = "FavoriteAssets_Thumbnail_ObjectRotationX";
+        private const string ObjectRotationYKey = "FavoriteAssets_Thumbnail_ObjectRotationY";
+        private const string ObjectRotationZKey = "FavoriteAssets_Thumbnail_ObjectRotationZ";
+        private const string CameraFovKey = "FavoriteAssets_Thumbnail_CameraFOV";
 
         public Vector3 LightRotation { get; set; }
         public float LightIntensity { get; set; }

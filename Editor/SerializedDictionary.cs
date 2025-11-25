@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace RoF.AssetFavoriteWindow.Editor
+namespace FavoriteAssetsWindow
 {
     [Serializable]
     internal class SerializableDictionary<TKey, TValue> : IEnumerable<KVPair<TKey, TValue>>

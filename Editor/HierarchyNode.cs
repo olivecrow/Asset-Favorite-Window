@@ -1,10 +1,10 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-namespace RoF.AssetFavoriteWindow.Editor
+namespace FavoriteAssetsWindow
 {
     [System.Serializable]
-    public class AFW_HierarchyNode
+    public class HierarchyNode
     {
         public string Name;
         public string GUID;
@@ -13,9 +13,9 @@ namespace RoF.AssetFavoriteWindow.Editor
         // [수정] 여기에 [SerializeReference] 속성을 추가하여 깊이 제한 문제 해결
         // 이 속성은 순환 참조나 깊은 계층 구조를 '값'이 아닌 '참조'로 저장하게 만듭니다.
         [SerializeReference]
-        public List<AFW_HierarchyNode> Children = new List<AFW_HierarchyNode>();
+        public List<HierarchyNode> Children = new List<HierarchyNode>();
 
-        public AFW_HierarchyNode()
+        public HierarchyNode()
         {
             GUID = System.Guid.NewGuid().ToString();
         }

@@ -1,9 +1,9 @@
 ﻿using UnityEngine;
 
-namespace RoF.AssetFavoriteWindow.Editor
+namespace FavoriteAssetsWindow
 {
     [System.Serializable]
-    public class AFW_AssetDetail
+    public class AssetDetail
     {
         public string guid;
         public Texture2D thumbnail;

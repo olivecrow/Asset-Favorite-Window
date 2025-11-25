@@ -1,6 +1,6 @@
 {
-    "name": "RoF.AssetFavoriteWindow.Editor",
-    "rootNamespace": "RoF.AssetFavoriteWindow.Editor",
+    "name": "FavoriteAssetsWindow",
+    "rootNamespace": "FavoriteAssetsWindow",
     "references": [],
     "includePlatforms": [
         "Editor"
