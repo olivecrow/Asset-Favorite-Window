@@ -50,19 +50,18 @@ namespace RoF.AssetFavoriteWindow.Editor
             SceneManager.MoveGameObjectToScene(light.gameObject, scene);
             light.type = LightType.Directional;
             light.intensity = settings.LightIntensity;
-            light.transform.rotation = Quaternion.LookRotation(settings.LightDirection);
+            light.transform.rotation = Quaternion.Euler(settings.LightRotation);
             
             var reflectionLight = new GameObject("ThumbnailLight", typeof(Light)).GetComponent<Light>();
             SceneManager.MoveGameObjectToScene(reflectionLight.gameObject, scene);
             reflectionLight.type = LightType.Directional;
             reflectionLight.intensity = settings.ReflectionIntensity;
             var mainLightRot = light.transform.eulerAngles;
-            reflectionLight.transform.rotation = Quaternion.Euler(mainLightRot.x, mainLightRot.y + 180, mainLightRot.z);
+            reflectionLight.transform.rotation = Quaternion.Euler(mainLightRot.x, mainLightRot.y - 90, mainLightRot.z);
 
             // Render the thumbnail
             RenderTexture renderTexture = new RenderTexture(settings.ThumbnailSize.x, settings.ThumbnailSize.y, 24);
             sceneCamera.targetTexture = renderTexture;
-            sceneCamera.Render();
             sceneCamera.Render();
 
             Texture2D thumbnail = new Texture2D(settings.ThumbnailSize.x, settings.ThumbnailSize.y, TextureFormat.RGB24, false);
@@ -113,10 +112,8 @@ namespace RoF.AssetFavoriteWindow.Editor
                 AFW_Data.instance.AppendDetail(asset, detail);
             }
             EnsureFolderExists(PATH_THUMBNAILS);
-            thumbnail.name = asset.name + "_Thumbnail";
+            thumbnail.name = $"{asset.name}_{detail.guid}_Thumbnail";
             var path = Path.Combine(PATH_THUMBNAILS, thumbnail.name + ".asset");
-            path = AssetDatabase.GenerateUniqueAssetPath(path);
-            thumbnail.name = Path.GetFileNameWithoutExtension(path);
             detail.thumbnail = thumbnail;
             
             AssetDatabase.CreateAsset(thumbnail, path);

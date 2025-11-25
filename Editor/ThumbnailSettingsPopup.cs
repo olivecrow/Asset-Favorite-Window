@@ -6,27 +6,13 @@ namespace RoF.AssetFavoriteWindow.Editor
 {
     public class ThumbnailSettingsPopup : EditorWindow
     {
-        public static Action<ThumbnailSettings> OnConfirm;
-        private Action<ThumbnailSettings> _tempConfirm;
-        private bool _isTemp;
-        
+        private Action<ThumbnailSettings> _onConfirm;
         private ThumbnailSettings _settings;
 
-        public static void ShowWindow()
+        public static void ShowWindow(Action<ThumbnailSettings> onConfirm, string title = "Thumbnail Settings")
         {
-            var window = GetWindow<ThumbnailSettingsPopup>(true, "Thumbnail Settings", true);
-            window._isTemp = false;
-            window._settings = ThumbnailSettings.LoadFromEditorPrefs();
-            window.ShowModalUtility();
-            window.minSize = new Vector2(350, 320);
-            window.maxSize = new Vector2(350, 320);
-        }
-        
-        public static void ShowWindow(Action<ThumbnailSettings> onConfirm)
-        {
-            var window = GetWindow<ThumbnailSettingsPopup>(true, "Refresh Thumbnail Settings", true);
-            window._isTemp = true;
-            window._tempConfirm = onConfirm;
+            var window = GetWindow<ThumbnailSettingsPopup>(true, title, true);
+            window._onConfirm = onConfirm;
             window._settings = ThumbnailSettings.LoadFromEditorPrefs();
             window.ShowModalUtility();
             window.minSize = new Vector2(350, 320);
@@ -38,7 +24,7 @@ namespace RoF.AssetFavoriteWindow.Editor
             EditorGUILayout.LabelField("Thumbnail Generation Settings", EditorStyles.boldLabel);
             EditorGUILayout.Space();
 
-            _settings.LightDirection = EditorGUILayout.Vector3Field("Light Direction", _settings.LightDirection);
+            _settings.LightRotation = EditorGUILayout.Vector3Field("Light Direction", _settings.LightRotation);
             _settings.LightIntensity = EditorGUILayout.FloatField("Light Intensity", _settings.LightIntensity);
             _settings.ReflectionIntensity = EditorGUILayout.FloatField("Reflection Intensity", _settings.ReflectionIntensity);
             _settings.ThumbnailSize = EditorGUILayout.Vector2IntField("Thumbnail Size", _settings.ThumbnailSize);
@@ -49,15 +35,8 @@ namespace RoF.AssetFavoriteWindow.Editor
 
             if (GUILayout.Button("Confirm"))
             {
-                if (!_isTemp)
-                {
-                    _settings.SaveToEditorPrefs();
-                    OnConfirm?.Invoke(_settings);
-                }
-                else
-                {
-                    _tempConfirm?.Invoke(_settings);
-                }
+                _settings.SaveToEditorPrefs();
+                _onConfirm?.Invoke(_settings);
                 Close();
             }
 
