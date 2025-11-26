@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace FavoriteAssetsWindow
 {
@@ -11,6 +12,7 @@ namespace FavoriteAssetsWindow
         private readonly FavoriteAssetsWindow _window;
         private readonly FavoriteAssetsData _data;
         private readonly VisualElement _inspectorContentContainer;
+        private Editor _activeEditor;
 
         public InspectorManager(FavoriteAssetsWindow window, FavoriteAssetsData data, VisualElement inspectorContentContainer)
         {
@@ -19,9 +21,24 @@ namespace FavoriteAssetsWindow
             _inspectorContentContainer = inspectorContentContainer;
         }
 
+        public void OnDisable()
+        {
+            if (_activeEditor != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_activeEditor);
+                _activeEditor = null;
+            }
+        }
+
         public void UpdateInspectorUI(HashSet<string> selectedAssetGuids)
         {
             if (_inspectorContentContainer == null) return;
+
+            if (_activeEditor != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_activeEditor);
+                _activeEditor = null;
+            }
             _inspectorContentContainer.Clear();
 
             if (selectedAssetGuids.Count == 0)
@@ -65,58 +82,71 @@ namespace FavoriteAssetsWindow
             }
 
             _data.TryGetDetail(asset, out var detail);
+            _activeEditor = Editor.CreateEditor(asset);
 
-            Texture preview = null;
-            if (detail != null)
+            if (_activeEditor != null && _activeEditor.HasPreviewGUI())
             {
-                preview = detail.thumbnail;
-            }
-            if (preview == null && asset is Texture t) preview = t;
-            if (preview == null) preview = AssetPreview.GetAssetPreview(asset);
-            if (preview == null) preview = AssetPreview.GetMiniThumbnail(asset);
-
-            var previewContainer = new VisualElement();
-            previewContainer.style.alignItems = Align.Center;
-            previewContainer.style.marginBottom = 15;
-            previewContainer.style.height = 256;
-            previewContainer.style.backgroundColor = new Color(0, 0, 0, 0.2f);
-            previewContainer.style.justifyContent = Justify.Center;
-            previewContainer.style.borderBottomLeftRadius = 5;
-            previewContainer.style.borderBottomRightRadius = 5;
-            previewContainer.style.borderTopLeftRadius = 5;
-            previewContainer.style.borderTopRightRadius = 5;
-
-            var image = new Image();
-            image.scaleMode = ScaleMode.ScaleToFit;
-            image.image = preview;
-            image.style.maxWidth = new Length(100, LengthUnit.Percent);
-            image.style.maxHeight = new Length(100, LengthUnit.Percent);
-
-            if (preview == null)
-            {
-                previewContainer.Add(new Label("No Preview"));
+                var previewContainer = new IMGUIContainer();
+                previewContainer.style.height = 256;
+                previewContainer.style.minHeight = 256;
+                previewContainer.style.marginBottom = 15;
+                previewContainer.onGUIHandler = () =>
+                {
+                    if (_activeEditor != null && _activeEditor.target != null)
+                    {
+                        _activeEditor.OnInteractivePreviewGUI(previewContainer.contentRect, GUI.skin.window);
+                    }
+                };
+                _inspectorContentContainer.Add(previewContainer);
             }
             else
             {
-                previewContainer.Add(image);
+                // Fallback for assets without an interactive preview
+                Texture preview = AssetPreview.GetAssetPreview(asset);
+                if (preview == null) preview = AssetPreview.GetMiniThumbnail(asset);
+                if (preview == null && asset is Texture t) preview = t;
+
+                var previewContainer = new VisualElement();
+                previewContainer.style.alignItems = Align.Center;
+                previewContainer.style.marginBottom = 15;
+                previewContainer.style.height = 256;
+                previewContainer.style.backgroundColor = new Color(0, 0, 0, 0.2f);
+                previewContainer.style.justifyContent = Justify.Center;
+
+                if (preview != null)
+                {
+                    var image = new Image
+                    {
+                        image = preview,
+                        scaleMode = ScaleMode.ScaleToFit,
+                        style = { maxWidth = new Length(100, LengthUnit.Percent), maxHeight = new Length(100, LengthUnit.Percent) }
+                    };
+                    previewContainer.Add(image);
+                }
+                else
+                {
+                    previewContainer.Add(new Label("No Preview"));
+                }
+                _inspectorContentContainer.Add(previewContainer);
             }
-            _inspectorContentContainer.Add(previewContainer);
 
             CreateReadOnlyField("Name", asset.name);
             CreateReadOnlyField("Type", asset.GetType().Name);
             CreateReadOnlyField("Path", path);
             CreateReadOnlyField("GUID", guid);
 
-            var descriptionLabel = new Label("Description");
-            descriptionLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            descriptionLabel.style.marginTop = 10;
+            var descriptionLabel = new Label("Description")
+            {
+                style = { unityFontStyleAndWeight = FontStyle.Bold, marginTop = 10 }
+            };
             _inspectorContentContainer.Add(descriptionLabel);
 
-            var descriptionField = new TextField();
-            descriptionField.multiline = true;
+            var descriptionField = new TextField
+            {
+                multiline = true,
+                style = { height = 60, whiteSpace = WhiteSpace.Normal }
+            };
             descriptionField.Q("unity-text-input").style.height = 60;
-            descriptionField.style.height = 60;
-            descriptionField.style.whiteSpace = WhiteSpace.Normal;
 
             if (detail == null)
             {
@@ -131,31 +161,61 @@ namespace FavoriteAssetsWindow
                 detail.description = evt.newValue;
                 _window.SaveData();
             });
-
             _inspectorContentContainer.Add(descriptionField);
 
-            var spacer = new VisualElement();
-            spacer.style.height = 20;
+            var spacer = new VisualElement { style = { height = 20 } };
             _inspectorContentContainer.Add(spacer);
 
-            var openBtn = new Button(() => AssetDatabase.OpenAsset(asset)) { text = "Open Asset" };
-            openBtn.style.height = 30;
+            var openBtn = new Button(() => AssetDatabase.OpenAsset(asset)) { text = "Open Asset", style = { height = 30 } };
             _inspectorContentContainer.Add(openBtn);
 
-            var pingBtn = new Button(() => { Selection.activeObject = asset; EditorGUIUtility.PingObject(asset); }) { text = "Ping Project" };
-            pingBtn.style.height = 30;
-            pingBtn.style.marginTop = 5;
+            var pingBtn = new Button(() => { Selection.activeObject = asset; EditorGUIUtility.PingObject(asset); })
+            {
+                text = "Ping Project",
+                style = { height = 30, marginTop = 5 }
+            };
             _inspectorContentContainer.Add(pingBtn);
+
+            var labelsSpacer = new VisualElement();
+            labelsSpacer.style.flexGrow = 1;
+            _inspectorContentContainer.Add(labelsSpacer);
+            
+            var labelsContainer = new VisualElement() { style = { flexDirection = FlexDirection.Row} };
+            foreach (var label in AssetDatabase.GetLabels(asset))
+            {
+                var labelGUI = new Label()
+                {
+                    text = label,
+                    style =
+                    {
+                        fontSize = 11,
+                        unityTextAlign = TextAnchor.MiddleCenter,
+                        height = 18,
+                        backgroundColor = new Color(0f, 0.3f, 0.5f),
+                        borderBottomLeftRadius = 10,
+                        borderBottomRightRadius = 10,
+                        borderTopLeftRadius = 10,
+                        borderTopRightRadius = 10,
+                        paddingBottom = 1,
+                        paddingTop = 1,
+                        paddingLeft = 4,
+                        paddingRight = 4,
+                    }
+                };
+                labelsContainer.Add(labelGUI);
+            }
+            _inspectorContentContainer.Add(labelsContainer);
         }
 
         private void CreateReadOnlyField(string labelName, string value)
         {
-            var field = new TextField(labelName);
-            field.value = value;
-            field.isReadOnly = true;
-            field.style.marginBottom = 2;
-            var labelElement = field.Q<Label>();
-            if (labelElement != null) labelElement.style.minWidth = 50;
+            var field = new TextField(labelName)
+            {
+                value = value,
+                isReadOnly = true,
+                style = { marginBottom = 2 }
+            };
+            field.Q<Label>().style.minWidth = 50;
             _inspectorContentContainer.Add(field);
         }
     }

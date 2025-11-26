@@ -39,6 +39,7 @@ namespace FavoriteAssetsWindow
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
             HierarchyManager?.SaveFoldoutState();
+            _inspectorManager?.OnDisable();
         }
 
         private void OnUndoRedo()
@@ -144,12 +145,15 @@ namespace FavoriteAssetsWindow
             inspectorScrollView.style.flexGrow = 1;
             inspectorScrollView.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
             inspectorPane.Add(inspectorScrollView);
+
+            inspectorScrollView.Q("unity-content-container").style.height = new Length(100, LengthUnit.Percent);
             
             var inspectorContentContainer = new VisualElement();
             inspectorContentContainer.style.paddingLeft = 10;
             inspectorContentContainer.style.paddingRight = 10;
             inspectorContentContainer.style.paddingTop = 10;
             inspectorContentContainer.style.paddingBottom = 10;
+            inspectorContentContainer.style.flexGrow = 1;
             inspectorScrollView.Add(inspectorContentContainer);
             #endregion
             

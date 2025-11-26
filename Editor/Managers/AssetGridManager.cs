@@ -132,7 +132,7 @@ namespace FavoriteAssetsWindow
             else
             {
                 cellWidth = size + 8;
-                cellHeight = size + 36;
+                cellHeight = size + 54;
                 columns = Mathf.FloorToInt((containerWidth - 20) / cellWidth);
                 if (columns < 1) columns = 1;
             }
@@ -214,6 +214,38 @@ namespace FavoriteAssetsWindow
                 var labelStyle = new GUIStyle(EditorStyles.miniLabel);
                 labelStyle.alignment = TextAnchor.MiddleLeft;
                 GUI.Label(labelRect, asset.name, labelStyle);
+                
+                var assetLabels = AssetDatabase.GetLabels(asset);
+                if (assetLabels.Length > 0)
+                {
+                    var labelGUIStyle = new GUIStyle(EditorStyles.label)
+                    {
+                        fontSize = 9,
+                        alignment = TextAnchor.MiddleCenter,
+                        normal = { textColor = Color.white }
+                    };
+                    
+                    float currentX = rect.x + 4;
+                    float labelY = rect.y + size + 28;
+                    
+                    foreach (var labelText in assetLabels)
+                    {
+                        var labelContent = new GUIContent(labelText);
+                        var labelSize = labelGUIStyle.CalcSize(labelContent);
+                        labelSize.x += 8;
+                        labelSize.y = 14;
+
+                        if (currentX + labelSize.x > rect.x + width - 4)
+                            break;
+
+                        var labelBgRect = new Rect(currentX, labelY, labelSize.x, labelSize.y);
+                        
+                        EditorGUI.DrawRect(labelBgRect, new Color(0f, 0.3f, 0.5f));
+                        GUI.Label(labelBgRect, labelContent, labelGUIStyle);
+                        
+                        currentX += labelSize.x + 2;
+                    }
+                }
             }
         }
 
