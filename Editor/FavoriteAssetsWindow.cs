@@ -308,26 +308,55 @@ namespace FavoriteAssetsWindow
         
         private void OnThumbnailToolbarButtonClick()
         {
-            // This requires CurrentDisplayGuids from AssetGridManager.
-            // For now, this functionality is paused pending a clearer definition of its requirements post-refactor.
-            EditorUtility.DisplayDialog("In Progress", "This functionality is being refactored.", "OK");
+            if (_assetGridManager == null || _assetGridManager.CurrentDisplayGuids.Count == 0)
+            {
+                EditorUtility.DisplayDialog("No Assets", "There are no assets to generate thumbnails for.", "OK");
+                return;
+            }
+
+            var prefabGuids = new List<string>();
+            foreach (var guid in _assetGridManager.CurrentDisplayGuids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!string.IsNullOrEmpty(path) && AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+                {
+                    prefabGuids.Add(guid);
+                }
+            }
+
+            if (prefabGuids.Count > 0)
+            {
+                ThumbnailSettingsPopup.ShowWindow(settings =>
+                {
+                    GenerateThumbnailsForGuids(prefabGuids);
+                }, true, "Generate Thumbnails for All Prefabs");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("No Prefabs", "There are no prefabs in the current view to generate thumbnails for.", "OK");
+            }
         }
         
-        public void RefreshThumbnailForPrefab(UnityEngine.Object asset)
+        public void RefreshThumbnailsForSelection()
         {
-            if (asset is not GameObject prefab) return;
-    
-            ThumbnailSettingsPopup.ShowWindow(settings =>
+            if (_assetGridManager == null || _assetGridManager.SelectedAssetGuids.Count == 0) return;
+
+            var prefabs = _assetGridManager.SelectedAssetGuids
+                .Select(guid => AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(guid)))
+                .Where(prefab => prefab != null)
+                .ToList();
+
+            if (prefabs.Any())
             {
-                Texture2D thumbnailTexture = ThumbnailController.TakePrefabThumbnail(prefab, settings);
-                if (thumbnailTexture != null)
+                ThumbnailSettingsPopup.ShowWindow(settings =>
                 {
-                    ThumbnailController.SaveThumbnail(prefab, thumbnailTexture);
-                    SaveData(); 
-                    Repaint();
-                    _inspectorManager.UpdateInspectorUI(_assetGridManager.SelectedAssetGuids);
-                }
-            }, "Refresh Thumbnail");
+                    GenerateThumbnails(prefabs, settings);
+                }, false, $"Refresh Thumbnail(s) for {prefabs.Count} Prefab(s)");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("No Prefabs Selected", "The current selection contains no prefabs to generate thumbnails for.", "OK");
+            }
         }
         #endregion
     }

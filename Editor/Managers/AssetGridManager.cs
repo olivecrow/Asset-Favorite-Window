@@ -31,6 +31,7 @@ namespace FavoriteAssetsWindow
 
 
         public HashSet<string> SelectedAssetGuids => _selectedAssetGuids;
+        public List<string> CurrentDisplayGuids => _currentDisplayGuids;
 
         public AssetGridManager(FavoriteAssetsWindow window, FavoriteAssetsData data, IMGUIContainer assetIMGUIContainer, Label itemPath, Slider zoomSlider)
         {
@@ -379,10 +380,14 @@ namespace FavoriteAssetsWindow
             menu.AddItem(new GUIContent("Copy GUID"), false, () => GUIUtility.systemCopyBuffer = guid);
             menu.AddSeparator("");
             
-            if (asset is GameObject)
-                menu.AddItem(new GUIContent("Refresh Thumbnail"), false, () => _window.RefreshThumbnailForPrefab(asset));
+            bool canRefresh = _selectedAssetGuids
+                .Select(g => AssetDatabase.GUIDToAssetPath(g))
+                .Any(p => AssetDatabase.LoadAssetAtPath<GameObject>(p) != null);
+
+            if (canRefresh)
+                menu.AddItem(new GUIContent("Refresh Thumbnail(s)"), false, () => _window.RefreshThumbnailsForSelection());
             else
-                menu.AddDisabledItem(new GUIContent("Refresh Thumbnail"));
+                menu.AddDisabledItem(new GUIContent("Refresh Thumbnail(s)"));
 
             menu.AddItem(new GUIContent("Delete"), false, () =>
             {

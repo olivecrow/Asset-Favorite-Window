@@ -27,6 +27,7 @@ namespace FavoriteAssetsWindow
             sceneCamera.fieldOfView = settings.CameraFOV;
             sceneCamera.farClipPlane = 1000;
             sceneCamera.nearClipPlane = 0.1f;
+            sceneCamera.allowMSAA = true;
 
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
             if (instance == null)
@@ -35,13 +36,16 @@ namespace FavoriteAssetsWindow
                 return null;
             }
 
+            instance.transform.position = Vector3.zero;
             instance.transform.rotation = Quaternion.Euler(settings.ObjectRotation);
 
             // Center the camera on the object
             Bounds bounds = GetBounds(instance);
             float maxDim = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+            var horizontalAvg = Mathf.Lerp(bounds.size.x, bounds.size.z, 0.5f);
+            var hvRatio = horizontalAvg / bounds.size.y;
             float distance = maxDim / (2f * Mathf.Tan(sceneCamera.fieldOfView * 0.5f * Mathf.Deg2Rad));
-            sceneCamera.transform.position = bounds.center - new Vector3(0, -bounds.size.y * 0.5f, distance * 1.166f);
+            sceneCamera.transform.position = bounds.center - new Vector3(0, -bounds.size.y * hvRatio, distance * 1.2f) + settings.CameraOffset;
             sceneCamera.transform.LookAt(bounds.center);
 
 
@@ -61,9 +65,10 @@ namespace FavoriteAssetsWindow
 
             // Render the thumbnail
             RenderTexture renderTexture = new RenderTexture(settings.ThumbnailSize.x, settings.ThumbnailSize.y, 24);
+            renderTexture.antiAliasing = 8;
             sceneCamera.targetTexture = renderTexture;
             sceneCamera.Render();
-
+            
             Texture2D thumbnail = new Texture2D(settings.ThumbnailSize.x, settings.ThumbnailSize.y, TextureFormat.RGB24, false);
             RenderTexture.active = renderTexture;
             thumbnail.ReadPixels(new Rect(0, 0, settings.ThumbnailSize.x, settings.ThumbnailSize.y), 0, 0);

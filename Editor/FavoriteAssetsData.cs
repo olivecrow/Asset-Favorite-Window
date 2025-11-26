@@ -16,7 +16,6 @@ namespace FavoriteAssetsWindow
         public int LastSelectedCategoryIndex = 0;
         public string LastSelectedCategoryGUID;
         
-        [NonSerialized] 
         private Dictionary<string, List<HierarchyNode>> _guidToNodesMap = new Dictionary<string, List<HierarchyNode>>();
 
         void Awake()
@@ -28,6 +27,14 @@ namespace FavoriteAssetsWindow
                 defaultCategory.RootNodes.Add(new HierarchyNode { Name = "Root" });
                 Categories.Add(defaultCategory);
             }
+        }
+
+        public void Reset()
+        {
+            Categories = new List<Category>();
+            var defaultCategory = new Category { Name = "Default" };
+            defaultCategory.RootNodes.Add(new HierarchyNode { Name = "Root" });
+            Categories.Add(defaultCategory);
         }
         
         public void RebuildGuidToNodesMap()

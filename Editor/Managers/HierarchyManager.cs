@@ -18,6 +18,8 @@ namespace FavoriteAssetsWindow
         private const string FOLDOUT_PREFS_KEY_PREFIX = "AFW_Foldout_";
         private const string LAST_SELECTED_NODE_GUID_KEY = "AFW_LastSelectedNodeGUID";
 
+        private enum DropPosition { Before, On, After }
+
         public HierarchyNode CurrentlySelectedNode => _hierarchyTreeView.selectedItem as HierarchyNode;
         public IEnumerable<HierarchyNode> SelectedNodes => _hierarchyTreeView.selectedItems.Cast<HierarchyNode>();
 
@@ -26,10 +28,30 @@ namespace FavoriteAssetsWindow
             _window = window;
             _data = data;
             _hierarchyTreeView = hierarchyTreeView;
+            
+            // _dropIndicator = new VisualElement();
+            // _dropIndicator.style.backgroundColor = new Color(0.2f, 0.5f, 0.8f, 0.7f);
+            // _dropIndicator.style.position = Position.Absolute;
+            // _dropIndicator.style.display = DisplayStyle.None;
+            // _dropIndicator.pickingMode = PickingMode.Ignore;
+            // _hierarchyTreeView.Add(_dropIndicator);
         }
 
         public void RegisterCallbacks()
         {
+            _hierarchyTreeView.setupDragAndDrop += args =>
+            {
+                var draggedNodes = _hierarchyTreeView.selectedItems.Cast<HierarchyNode>().ToList();
+                if (!draggedNodes.Any())
+                    return new StartDragArgs();
+
+                var startDragArgs = new StartDragArgs(draggedNodes.Count > 1 ? "<Multiple>" : draggedNodes.First().Name, DragVisualMode.Move);
+                startDragArgs.SetGenericData("DraggedNodes", draggedNodes);
+                return startDragArgs;
+            };
+            
+            _hierarchyTreeView.RegisterCallback<DragUpdatedEvent>(OnDragUpdated);
+            _hierarchyTreeView.RegisterCallback<DragPerformEvent>(OnDragPerform);
             _hierarchyTreeView.selectionChanged += OnHierarchySelectionChanged;
             _hierarchyTreeView.RegisterCallback<ContextClickEvent>(evt =>
             {
@@ -111,7 +133,7 @@ namespace FavoriteAssetsWindow
         void ShowHierarchyDropdownMenu(Vector2 mousePosition)
         {
             var menu = new GenericMenu();
-            if (TryGetItemUnderPointer<HierarchyNode>(_hierarchyTreeView, _hierarchyTreeView.WorldToLocal(mousePosition), out var selectedNode, out var index))
+            if (TryGetItemUnderPointer(_hierarchyTreeView, _hierarchyTreeView.WorldToLocal(mousePosition), out HierarchyNode selectedNode, out _))
             {
                 menu.AddItem(new GUIContent("Add"), false, () => AddHierarchyNode(selectedNode));
                 menu.AddItem(new GUIContent("Rename"), false, () => { _pendingUndoGroupId = -1; BeginHierarchyRename(); });
@@ -171,37 +193,28 @@ namespace FavoriteAssetsWindow
             Undo.SetCurrentGroupName("Add Folder");
             Undo.RecordObject(_data, "Add Folder");
 
-            var newNode = new HierarchyNode();
-            newNode.Name = "New Folder";
+            var newNode = new HierarchyNode { Name = "New Folder" };
             if (parentNode != null) parentNode.Children.Add(newNode);
             else currentCategory.RootNodes.Add(newNode);
 
             SaveFoldoutState();
             _window.SaveDataAndRebuildMap();
             RebuildHierarchy();
-            foreach (int id in _hierarchyTreeView.viewController.GetAllItemIds())
-            {
-                var node = _hierarchyTreeView.GetItemDataForId<HierarchyNode>(id);
-                if (node == newNode)
-                {
-                    _hierarchyTreeView.SetSelectionById(id);
-                    break;
-                }
-            }
+            
+            var newItemId = _hierarchyTreeView.viewController.GetAllItemIds()
+                .FirstOrDefault(id => _hierarchyTreeView.GetItemDataForId<HierarchyNode>(id) == newNode);
 
-            if (parentNode != null)
+            if (newItemId != default)
             {
-                foreach (int id in _hierarchyTreeView.viewController.GetAllItemIds())
+                _hierarchyTreeView.SetSelectionById(newItemId);
+                if (parentNode != null)
                 {
-                    var node = _hierarchyTreeView.GetItemDataForId<HierarchyNode>(id);
-                    if (node == parentNode)
-                    {
-                        _hierarchyTreeView.ExpandItem(id);
-                        break;
-                    }
+                    var parentId = _hierarchyTreeView.viewController.GetAllItemIds()
+                        .FirstOrDefault(id => _hierarchyTreeView.GetItemDataForId<HierarchyNode>(id) == parentNode);
+                    if (parentId != default) _hierarchyTreeView.ExpandItem(parentId);
                 }
+                BeginHierarchyRename();
             }
-            BeginHierarchyRename();
         }
 
         private void BeginHierarchyRename()
@@ -211,9 +224,8 @@ namespace FavoriteAssetsWindow
             _nodesToRename = _hierarchyTreeView.selectedItems.Cast<HierarchyNode>().ToList();
             if (_nodesToRename.Count == 0) return;
 
-            var indices = _hierarchyTreeView.selectedIndices.ToList();
-            int firstIndex = indices[0];
-            int id = _hierarchyTreeView.GetIdForIndex(firstIndex);
+            var firstIndex = _hierarchyTreeView.selectedIndices.First();
+            var id = _hierarchyTreeView.GetIdForIndex(firstIndex);
 
             var itemElement = _hierarchyTreeView.GetRootElementForId(id);
             if (itemElement == null)
@@ -227,14 +239,14 @@ namespace FavoriteAssetsWindow
             if (label == null) return;
 
             label.style.display = DisplayStyle.None;
-            var renameField = new TextField();
-            renameField.value = label.text;
+            var renameField = new TextField { value = label.text };
             renameField.style.flexGrow = 1;
             renameField.style.marginLeft = label.style.marginLeft;
             label.parent.Add(renameField);
-
+            
             renameField.RegisterCallback<FocusOutEvent>(evt => { CommitHierarchyRename(renameField.value); evt.StopPropagation(); _hierarchyTreeView.Focus(); });
             _window.rootVisualElement.schedule.Execute(() => { var input = renameField.Q("unity-text-input"); input?.Focus(); });
+            SaveFoldoutState();
         }
 
         private void CommitHierarchyRename(string newName)
@@ -248,9 +260,8 @@ namespace FavoriteAssetsWindow
             }
 
             Undo.RecordObject(_data, "Rename Folder");
-            var selectedNodes = _nodesToRename;
-            bool changed = false;
-            foreach (var node in selectedNodes)
+            var changed = false;
+            foreach (var node in _nodesToRename)
             {
                 if (node.Name != newName)
                 {
@@ -265,10 +276,7 @@ namespace FavoriteAssetsWindow
                 _pendingUndoGroupId = -1;
             }
 
-            if (changed)
-            {
-                _window.SaveData();
-            }
+            if (changed) _window.SaveData();
 
             RebuildHierarchy();
             _nodesToRename.Clear();
@@ -282,7 +290,7 @@ namespace FavoriteAssetsWindow
 
             Undo.RecordObject(_data, "Delete Folder");
             var currentCategory = _data.Categories[_data.LastSelectedCategoryIndex];
-            bool anyChanged = false;
+            var anyChanged = false;
             foreach (var node in selectedNodes)
             {
                 if (FindAndRemoveNode(currentCategory.RootNodes, node)) anyChanged = true;
@@ -308,21 +316,19 @@ namespace FavoriteAssetsWindow
         {
             if (node == null || _data == null || _data.Categories == null || _data.LastSelectedCategoryIndex < 0) return null;
             var currentCategory = _data.Categories[_data.LastSelectedCategoryIndex];
-            if (currentCategory == null) return null;
-            return $"{FOLDOUT_PREFS_KEY_PREFIX}{currentCategory.Name}_{node.GUID}";
+            return currentCategory == null ? null : $"{FOLDOUT_PREFS_KEY_PREFIX}{currentCategory.Name}_{node.GUID}";
         }
 
         public void SaveFoldoutState()
         {
             if (_hierarchyTreeView == null || _data == null || _hierarchyTreeView.GetTreeCount() <= 0) return;
             
-            var count = _hierarchyTreeView.GetTreeCount();
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < _hierarchyTreeView.GetTreeCount(); i++)
             {
                 var id = _hierarchyTreeView.GetIdForIndex(i);
                 if (id < 0) continue;
                 var node = _hierarchyTreeView.GetItemDataForIndex<HierarchyNode>(i);
-                string key = GetFoldoutKey(node);
+                var key = GetFoldoutKey(node);
                 if (!string.IsNullOrEmpty(key)) EditorPrefs.SetBool(key, _hierarchyTreeView.IsExpanded(id));
             }
         }
@@ -330,37 +336,176 @@ namespace FavoriteAssetsWindow
         private void RestoreFoldoutState()
         {
             if (_hierarchyTreeView == null || _data == null || _hierarchyTreeView.GetTreeCount() <= 0) return;
-            var count = _hierarchyTreeView.GetTreeCount();
-            for (int i = 0; i < count; i++)
+            for (var i = 0; i < _hierarchyTreeView.GetTreeCount(); i++)
             {
                 var id = _hierarchyTreeView.GetIdForIndex(i);
                 if (id < 0) continue;
                 var node = _hierarchyTreeView.GetItemDataForIndex<HierarchyNode>(i);
-                string key = GetFoldoutKey(node);
-                if (!string.IsNullOrEmpty(key))
-                {
-                    bool isExpanded = EditorPrefs.GetBool(key, true);
-                    if (isExpanded) _hierarchyTreeView.ExpandItem(id, true, false);
-                    else _hierarchyTreeView.CollapseItem(id, false);
-                }
+                var key = GetFoldoutKey(node);
+                if (string.IsNullOrEmpty(key)) continue;
+                
+                var isExpanded = EditorPrefs.GetBool(key, true);
+                if (isExpanded) _hierarchyTreeView.ExpandItem(id, true, false);
+                else _hierarchyTreeView.CollapseItem(id, false);
             }
             _hierarchyTreeView.RefreshItems();
         }
 
         private void RestoreHierarchySelection()
         {
-            string lastSelectedGuid = EditorPrefs.GetString(LAST_SELECTED_NODE_GUID_KEY);
+            var lastSelectedGuid = EditorPrefs.GetString(LAST_SELECTED_NODE_GUID_KEY);
             if (string.IsNullOrEmpty(lastSelectedGuid)) return;
-            for (int i = 0; i < _hierarchyTreeView.GetTreeCount(); i++)
+            for (var i = 0; i < _hierarchyTreeView.GetTreeCount(); i++)
             {
                 var node = _hierarchyTreeView.GetItemDataForIndex<HierarchyNode>(i);
-                if (node != null && node.GUID == lastSelectedGuid)
+                if (node == null || node.GUID != lastSelectedGuid) continue;
+                
+                _hierarchyTreeView.selectedIndex = i;
+                _hierarchyTreeView.ScrollToItem(i);
+                return;
+            }
+        }
+        
+        #region Drag and Drop
+        
+        private void OnDragUpdated(DragUpdatedEvent evt)
+        {
+            var draggedNodes = DragAndDrop.GetGenericData("DraggedNodes") as List<HierarchyNode>;
+            if (draggedNodes == null)
+            {
+                return;
+            }
+
+            if (!TryGetItemUnderPointer(_hierarchyTreeView, _hierarchyTreeView.WorldToLocal(evt.mousePosition), out HierarchyNode targetNode, out var targetIndex))
+            {
+                DragAndDrop.visualMode = DragAndDropVisualMode.Move;
+                evt.StopPropagation();
+                return;
+            }
+
+            foreach (var draggedNode in draggedNodes)
+            {
+                if (IsNodeDescendantOf(targetNode, draggedNode) || targetNode == draggedNode)
                 {
-                    _hierarchyTreeView.selectedIndex = i;
-                    _hierarchyTreeView.ScrollToItem(i);
+                    DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
                     return;
                 }
             }
+
+            DragAndDrop.visualMode = DragAndDropVisualMode.Move;
+            evt.StopPropagation();
         }
+
+        private void OnDragPerform(DragPerformEvent evt)
+        {
+            var draggedNodes = DragAndDrop.GetGenericData("DraggedNodes") as List<HierarchyNode>;
+            if (draggedNodes == null) return;
+
+            if (!TryGetItemUnderPointer(_hierarchyTreeView, _hierarchyTreeView.WorldToLocal(evt.mousePosition), out HierarchyNode targetNode, out var targetIndex))
+            {
+                MoveNodes(draggedNodes, null, -1);
+                evt.StopPropagation();
+                return;
+            }
+
+            var itemElement = _hierarchyTreeView.GetRootElementForIndex(targetIndex);
+            var localMousePos = itemElement.WorldToLocal(evt.mousePosition);
+            var dropPosition = GetDropPosition(localMousePos, itemElement.layout.height);
+            
+            var parent = FindParentOf(targetNode);
+            var currentCategory = _data.Categories[_data.LastSelectedCategoryIndex];
+            var targetList = parent?.Children ?? currentCategory.RootNodes;
+            var insertIndex = targetList.IndexOf(targetNode);
+
+            switch (dropPosition)
+            {
+                case DropPosition.On:
+                    MoveNodes(draggedNodes, targetNode, -1);
+                    break;
+                case DropPosition.Before:
+                    MoveNodes(draggedNodes, parent, insertIndex);
+                    break;
+                case DropPosition.After:
+                    MoveNodes(draggedNodes, parent, insertIndex + 1);
+                    break;
+            }
+
+            evt.StopPropagation();
+        }
+
+        private void MoveNodes(List<HierarchyNode> nodesToMove, HierarchyNode newParent, int insertIndex)
+        {
+            Undo.RecordObject(_data, "Move Hierarchy Nodes");
+
+            var currentCategory = _data.Categories[_data.LastSelectedCategoryIndex];
+            foreach (var node in nodesToMove)
+            {
+                var oldParent = FindParentOf(node);
+                if (oldParent != null) oldParent.Children.Remove(node);
+                else currentCategory.RootNodes.Remove(node);
+            }
+
+            var targetList = newParent?.Children ?? currentCategory.RootNodes;
+
+            if (insertIndex < 0 || insertIndex > targetList.Count)
+            {
+                targetList.AddRange(nodesToMove);
+            }
+            else
+            {
+                targetList.InsertRange(insertIndex, nodesToMove);
+            }
+
+            if (newParent != null)
+            {
+                var parentId = _hierarchyTreeView.viewController.GetAllItemIds().FirstOrDefault(id => _hierarchyTreeView.GetItemDataForId<HierarchyNode>(id) == newParent);
+                if (parentId != default) _hierarchyTreeView.ExpandItem(parentId);
+            }
+
+            SaveFoldoutState();
+            _window.SaveDataAndRebuildMap();
+            RebuildHierarchy();
+            
+            var selectionIds = nodesToMove.Select(node => _hierarchyTreeView.viewController.GetAllItemIds()
+                    .FirstOrDefault(id => _hierarchyTreeView.GetItemDataForId<HierarchyNode>(id) == node))
+                .Where(id => id != default).ToList();
+            
+            if(selectionIds.Any()) _hierarchyTreeView.SetSelectionById(selectionIds);
+        }
+
+        private HierarchyNode FindParentOf(HierarchyNode childNode)
+        {
+            var currentCategory = _data.Categories[_data.LastSelectedCategoryIndex];
+            return FindParentRecursive(currentCategory.RootNodes, childNode, null);
+        }
+
+        private HierarchyNode FindParentRecursive(IEnumerable<HierarchyNode> nodes, HierarchyNode childNode, HierarchyNode parent)
+        {
+            foreach (var node in nodes)
+            {
+                if (node == childNode) return parent;
+                var foundParent = FindParentRecursive(node.Children, childNode, node);
+                if (foundParent != null) return foundParent;
+            }
+            return null;
+        }
+
+        private bool IsNodeDescendantOf(HierarchyNode potentialDescendant, HierarchyNode potentialAncestor)
+        {
+            if (potentialAncestor.Children == null || potentialAncestor.Children.Count == 0) return false;
+            if (potentialAncestor.Children.Contains(potentialDescendant)) return true;
+            return potentialAncestor.Children.Any(child => IsNodeDescendantOf(potentialDescendant, child));
+        }
+
+        private DropPosition GetDropPosition(Vector2 localMousePos, float itemHeight)
+        {
+            var topThird = itemHeight * 0.25f;
+            var bottomThird = itemHeight * 0.75f;
+
+            if (localMousePos.y < topThird) return DropPosition.Before;
+            return localMousePos.y > bottomThird ? DropPosition.After : DropPosition.On;
+        }
+        
+        #endregion
     }
 }
