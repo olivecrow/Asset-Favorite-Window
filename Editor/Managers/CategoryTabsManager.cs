@@ -100,6 +100,9 @@ namespace FavoriteAssetsWindow
 
             int newIndex = _data.Categories.Count - 1;
             _window.SaveData();
+            
+            RebuildCategoryTabs();
+            
             SelectCategory(newIndex, true);
             _window.rootVisualElement.schedule.Execute(() => { RenameCategory(newIndex); });
         }
@@ -118,10 +121,13 @@ namespace FavoriteAssetsWindow
                 defaultCategory.RootNodes.Add(new HierarchyNode { Name = "Root" });
                 _data.Categories.Add(defaultCategory);
             }
+            
+            if (index == _data.LastSelectedCategoryIndex)
+                _data.LastSelectedCategoryIndex = Mathf.Max(0, index - 1);
 
             _window.ValidateAndRestoreSelection();
-            SelectCategory(_data.LastSelectedCategoryIndex);
             RebuildCategoryTabs();
+            SelectCategory(_data.LastSelectedCategoryIndex, true);
             _window.SaveDataAndRebuildMap();
         }
 

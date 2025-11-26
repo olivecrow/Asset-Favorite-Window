@@ -33,6 +33,7 @@ namespace FavoriteAssetsWindow
         public HashSet<string> SelectedAssetGuids => _selectedAssetGuids;
         public List<string> CurrentDisplayGuids => _currentDisplayGuids;
 
+        List<HierarchyNode> _currentNodes;
         public AssetGridManager(FavoriteAssetsWindow window, FavoriteAssetsData data, IMGUIContainer assetIMGUIContainer, Label itemPath, Slider zoomSlider)
         {
             _window = window;
@@ -64,6 +65,7 @@ namespace FavoriteAssetsWindow
                 return;
             }
 
+            _currentNodes = selectedNodes.ToList();
             var uniqueGuids = new HashSet<string>();
             foreach (HierarchyNode node in selectedNodes)
             {
@@ -112,7 +114,24 @@ namespace FavoriteAssetsWindow
 
         private void DrawAssetGrid()
         {
-            if (_currentDisplayGuids == null || _currentDisplayGuids.Count == 0) return;
+            if (_currentDisplayGuids == null || _currentDisplayGuids.Count == 0)
+            {
+                var style = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 20,
+                    normal = { textColor = Color.gray }
+                };
+                if(_currentNodes.Count > 1)
+                {
+                    GUILayout.Label("No assets in the current nodes", style, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                }
+                else
+                {
+                    GUILayout.Label($"No assets in the current node '{_currentNodes[0].Name}'", style, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+                }
+                return;
+            }
 
             float containerWidth = _assetIMGUIContainer.contentRect.width;
             if (containerWidth < 1) containerWidth = Screen.width - 450;
@@ -188,10 +207,44 @@ namespace FavoriteAssetsWindow
                 Texture2D icon = AssetDatabase.GetCachedIcon(path) as Texture2D;
                 if (icon != null) GUI.DrawTexture(iconRect, icon);
 
-                Rect labelRect = new Rect(rect.x + 24, rect.y, rect.width - 24, rect.height);
-                var labelStyle = new GUIStyle(EditorStyles.label);
-                labelStyle.alignment = TextAnchor.MiddleLeft;
-                GUI.Label(labelRect, asset.name, labelStyle);
+                var labelStyle = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft };
+                var assetNameContent = new GUIContent(asset.name);
+                var assetNameSize = labelStyle.CalcSize(assetNameContent);
+                
+                Rect nameLabelRect = new Rect(rect.x + 24, rect.y, assetNameSize.x, rect.height);
+                GUI.Label(nameLabelRect, assetNameContent, labelStyle);
+                
+                var assetLabels = AssetDatabase.GetLabels(asset);
+                if (assetLabels.Length > 0)
+                {
+                    var labelGUIStyle = new GUIStyle(EditorStyles.label)
+                    {
+                        fontSize = 9,
+                        alignment = TextAnchor.MiddleCenter,
+                        normal = { textColor = Color.white }
+                    };
+                    
+                    float currentX = nameLabelRect.xMax + 8;
+                    float labelY = rect.y + (rect.height - 14) / 2;
+                    
+                    foreach (var labelText in assetLabels)
+                    {
+                        var labelContent = new GUIContent(labelText);
+                        var labelSize = labelGUIStyle.CalcSize(labelContent);
+                        labelSize.x += 8;
+                        labelSize.y = 14;
+
+                        if (currentX + labelSize.x > rect.x + width - 4)
+                            break;
+
+                        var labelBgRect = new Rect(currentX, labelY, labelSize.x, labelSize.y);
+                        
+                        EditorGUI.DrawRect(labelBgRect, new Color(0f, 0.3f, 0.5f));
+                        GUI.Label(labelBgRect, labelContent, labelGUIStyle);
+                        
+                        currentX += labelSize.x + 2;
+                    }
+                }
             }
             else
             {
