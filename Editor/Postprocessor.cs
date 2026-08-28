@@ -1,74 +1,121 @@
-﻿using UnityEditor;
+using System;
+using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace FavoriteAssetsWindow
 {
     public class Postprocessor : AssetPostprocessor
     {
-        private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
+        private static readonly HashSet<string> PendingPrefabGuids = new();
+        private static bool refreshScheduled;
+
+        private static void OnPostprocessAllAssets(
+            string[] importedAssets,
+            string[] deletedAssets,
+            string[] movedAssets,
+            string[] movedFromAssetPaths)
         {
-            // The instance can be null during the first import of the package.
             if (!FavoriteAssetsData.instance) return;
-            
-            var data = FavoriteAssetsData.instance;
+
+            FavoriteAssetsData data = FavoriteAssetsData.instance;
             bool dataChanged = false;
 
-            // Efficiently handle deleted assets
             if (deletedAssets.Length > 0)
             {
-                data.RebuildGuidToNodesMap();
-                foreach (string path in deletedAssets)
+                FavoriteAssetsIndex.Rebuild(data);
+                foreach (string guid in FavoriteAssetsIndex.GetAssetGuids(data))
                 {
-                    string guid = AssetDatabase.AssetPathToGUID(path);
-                    if (string.IsNullOrEmpty(guid)) continue;
+                    // A deleted path no longer reliably resolves back to its GUID here.
+                    // Sweep only the small set of favorited GUIDs and keep moved assets,
+                    // whose GUID already resolves to the new path.
+                    if (!string.IsNullOrEmpty(AssetDatabase.GUIDToAssetPath(guid))) continue;
 
-                    if (data.RemoveAssetGuidFromAllNodes(guid))
-                    {
-                        dataChanged = true;
-                    }
+                    bool removedFromNodes = FavoriteAssetsIndex.RemoveAssetGuidFromAllNodes(data, guid);
+                    bool removedDetail = data.RemoveDetail(guid);
+                    ThumbnailController.DeleteThumbnail(guid);
+                    dataChanged |= removedFromNodes || removedDetail;
                 }
             }
 
-            // Handle imported/updated assets
-            if (importedAssets.Length > 0)
+            ThumbnailSettings settings = ThumbnailSettings.LoadFromEditorPrefs();
+            if (settings.AutoRefreshOnImport && importedAssets.Length > 0)
             {
-                data.RebuildGuidToNodesMap();
+                FavoriteAssetsIndex.Rebuild(data);
                 foreach (string path in importedAssets)
                 {
-                    if (path.EndsWith(".prefab"))
+                    if (!path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    string guid = AssetDatabase.AssetPathToGUID(path);
+                    if (FavoriteAssetsIndex.IsAssetFavorited(data, guid)) QueueThumbnailRefresh(guid);
+                }
+            }
+
+            if (!dataChanged) return;
+
+            data.Save();
+            RepaintWindowIfOpen();
+        }
+
+        private static void QueueThumbnailRefresh(string guid)
+        {
+            if (string.IsNullOrWhiteSpace(guid)) return;
+
+            PendingPrefabGuids.Add(guid);
+            if (refreshScheduled) return;
+
+            refreshScheduled = true;
+            EditorApplication.delayCall += ProcessPendingThumbnailRefreshes;
+        }
+
+        private static void ProcessPendingThumbnailRefreshes()
+        {
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                EditorApplication.delayCall += ProcessPendingThumbnailRefreshes;
+                return;
+            }
+
+            refreshScheduled = false;
+            if (!ThumbnailSettings.LoadFromEditorPrefs().AutoRefreshOnImport)
+            {
+                PendingPrefabGuids.Clear();
+                return;
+            }
+
+            var pendingGuids = new List<string>(PendingPrefabGuids);
+            PendingPrefabGuids.Clear();
+            bool refreshedAny = false;
+            ThumbnailSettings settings = ThumbnailSettings.LoadFromEditorPrefs();
+
+            foreach (string guid in pendingGuids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab == null) continue;
+
+                try
+                {
+                    if (ThumbnailController.GenerateAndSaveThumbnail(prefab, settings))
                     {
-                        string guid = AssetDatabase.AssetPathToGUID(path);
-                        if (data.IsAssetFavorited(guid))
-                        {
-                            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                            if (prefab != null)
-                            {
-                                RefreshThumbnailForPrefab(prefab);
-                            }
-                        }
+                        refreshedAny = true;
                     }
                 }
-            }
-            
-            if (dataChanged)
-            {
-                data.Save();
-                // If any data changed, find the window and tell it to repaint.
-                if (EditorWindow.HasOpenInstances<FavoriteAssetsWindow>())
+                catch (Exception exception)
                 {
-                    EditorWindow.GetWindow<FavoriteAssetsWindow>().Repaint();
+                    Debug.LogError(
+                        $"Failed to refresh Favorite Assets thumbnail for '{path}': {exception}");
                 }
             }
-        }
-        
-        private static void RefreshThumbnailForPrefab(GameObject prefab)
-        {
-            var settings = ThumbnailSettings.LoadFromEditorPrefs();
 
-            Texture2D thumbnailTexture = ThumbnailController.TakePrefabThumbnail(prefab, settings);
-            if (thumbnailTexture != null)
+            if (refreshedAny) RepaintWindowIfOpen();
+        }
+
+        private static void RepaintWindowIfOpen()
+        {
+            if (EditorWindow.HasOpenInstances<FavoriteAssetsWindow>())
             {
-                ThumbnailController.SaveThumbnail(prefab, thumbnailTexture);
+                EditorWindow.GetWindow<FavoriteAssetsWindow>().Repaint();
             }
         }
     }

@@ -20,6 +20,7 @@ namespace FavoriteAssetsWindow
         const string CameraOffsetXKey = "FavoriteAssets_Thumbnail_CameraOffsetX";
         const string CameraOffsetYKey = "FavoriteAssets_Thumbnail_CameraOffsetY";
         const string CameraOffsetZKey = "FavoriteAssets_Thumbnail_CameraOffsetZ";
+        private const string AutoRefreshOnImportKey = "FavoriteAssets_Thumbnail_AutoRefreshOnImport";
 
         public Vector3 LightRotation { get; set; }
         public float LightIntensity { get; set; }
@@ -28,6 +29,7 @@ namespace FavoriteAssetsWindow
         public Vector3 ObjectRotation { get; set; }
         public float CameraFOV { get; set; }
         public Vector3 CameraOffset { get; set; }
+        public bool AutoRefreshOnImport { get; set; }
 
         public static ThumbnailSettings LoadFromEditorPrefs()
         {
@@ -55,6 +57,7 @@ namespace FavoriteAssetsWindow
                     EditorPrefs.GetFloat(CameraOffsetYKey, 0f),
                     EditorPrefs.GetFloat(CameraOffsetZKey, 0f)
                 ),
+                AutoRefreshOnImport = EditorPrefs.GetBool(AutoRefreshOnImportKey, true),
             };
         }
 
@@ -74,6 +77,7 @@ namespace FavoriteAssetsWindow
             EditorPrefs.SetFloat(CameraOffsetXKey, CameraOffset.x);
             EditorPrefs.SetFloat(CameraOffsetYKey, CameraOffset.y);
             EditorPrefs.SetFloat(CameraOffsetZKey, CameraOffset.z);
+            EditorPrefs.SetBool(AutoRefreshOnImportKey, AutoRefreshOnImport);
         }
     }
 }

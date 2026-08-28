@@ -1,0 +1,22 @@
+{
+  "name": "com.olivecrow.asset-favorite-window",
+  "version": "0.1.0",
+  "displayName": "Asset Favorite Window",
+  "description": "카테고리와 계층으로 프로젝트 에셋을 정리하고 프리팹 썸네일을 관리하는 Unity Editor 도구입니다.",
+  "unity": "6000.3",
+  "type": "tool",
+  "author": {
+    "name": "olivecrow",
+    "url": "https://github.com/olivecrow"
+  },
+  "documentationUrl": "https://github.com/olivecrow/Asset-Favorite-Window/blob/main/Documentation~/index.md",
+  "changelogUrl": "https://github.com/olivecrow/Asset-Favorite-Window/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/olivecrow/Asset-Favorite-Window/blob/main/LICENSE.md",
+  "keywords": [
+    "editor",
+    "assets",
+    "favorites",
+    "thumbnails"
+  ],
+  "dependencies": {}
+}

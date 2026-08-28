@@ -6,7 +6,18 @@ namespace FavoriteAssetsWindow
     public class AssetDetail
     {
         public string guid;
-        public Texture2D thumbnail;
+        [SerializeField, HideInInspector]
+        private Texture2D thumbnail;
         public string description;
+
+        internal Texture2D LegacyThumbnail => thumbnail;
+
+        internal bool ClearLegacyThumbnail()
+        {
+            if (thumbnail == null) return false;
+
+            thumbnail = null;
+            return true;
+        }
     }
 }

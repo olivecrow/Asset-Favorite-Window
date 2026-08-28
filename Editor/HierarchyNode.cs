@@ -10,8 +10,7 @@ namespace FavoriteAssetsWindow
         public string GUID;
         public List<string> AssetGUIDs = new List<string>();
 
-        // [수정] 여기에 [SerializeReference] 속성을 추가하여 깊이 제한 문제 해결
-        // 이 속성은 순환 참조나 깊은 계층 구조를 '값'이 아닌 '참조'로 저장하게 만듭니다.
+        // Managed references keep deep node trees from hitting Unity's inline serialization depth limit.
         [SerializeReference]
         public List<HierarchyNode> Children = new List<HierarchyNode>();
 

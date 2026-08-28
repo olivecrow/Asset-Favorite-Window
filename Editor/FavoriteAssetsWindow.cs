@@ -17,9 +17,11 @@ namespace FavoriteAssetsWindow
         public HierarchyManager HierarchyManager { get; private set; }
         private AssetGridManager _assetGridManager;
         private InspectorManager _inspectorManager;
-        
+
+        private const string SHOW_MATERIALS_PREFS_KEY = "AFW_ShowMaterials";
+
         [MenuItem("Window/Favorite Assets")]
-        [Shortcut("Favorite Assets", KeyCode.W, ShortcutModifiers.Shift)]
+        [Shortcut("Olivecrow/Favorite Assets", KeyCode.W, ShortcutModifiers.Shift)]
         public static void ShowWindow()
         {
             FavoriteAssetsWindow wnd = GetWindow<FavoriteAssetsWindow>();
@@ -31,7 +33,12 @@ namespace FavoriteAssetsWindow
             Undo.undoRedoPerformed += OnUndoRedo;
             if (data != null)
             {
-                data.RebuildGuidToNodesMap();
+                FavoriteAssetsIndex.Rebuild(data);
+            }
+
+            if (_assetGridManager != null)
+            {
+                _assetGridManager.ShowMaterials = EditorPrefs.GetBool(SHOW_MATERIALS_PREFS_KEY, false);
             }
         }
 
@@ -40,24 +47,29 @@ namespace FavoriteAssetsWindow
             Undo.undoRedoPerformed -= OnUndoRedo;
             HierarchyManager?.SaveFoldoutState();
             _inspectorManager?.OnDisable();
+
+            if (_assetGridManager != null)
+            {
+                EditorPrefs.SetBool(SHOW_MATERIALS_PREFS_KEY, _assetGridManager.ShowMaterials);
+            }
         }
 
         private void OnUndoRedo()
         {
             if (data == null) return;
-            
+
             ValidateAndRestoreSelection();
-            data.RebuildGuidToNodesMap();
-            
+            FavoriteAssetsIndex.Rebuild(data);
+
             _categoryTabsManager?.RebuildCategoryTabs();
             HierarchyManager?.RebuildHierarchy();
-            
+
             if (HierarchyManager != null && _assetGridManager != null)
                 _assetGridManager.RebuildAssetGrid(HierarchyManager.SelectedNodes);
-            
+
             if (_inspectorManager != null && _assetGridManager != null)
                 _inspectorManager.UpdateInspectorUI(_assetGridManager.SelectedAssetGuids);
-            
+
             Repaint();
         }
 
@@ -85,7 +97,7 @@ namespace FavoriteAssetsWindow
             addCategoryButton.style.height = 25;
             addCategoryButton.style.marginLeft = 2;
             categoryBar.Add(addCategoryButton);
-            
+
             var mainSplitView = new TwoPaneSplitView(0, 250, TwoPaneSplitViewOrientation.Horizontal);
             root.Add(mainSplitView);
 
@@ -105,16 +117,29 @@ namespace FavoriteAssetsWindow
             var gridPane = new VisualElement();
             gridPane.style.flexGrow = 1;
             contentSplitView.Add(gridPane);
-            
+
             var gridToolbar = new Toolbar();
             gridPane.Add(gridToolbar);
-            
+
             var sortModeMenu = new ToolbarMenu { text = "Sort" };
             gridToolbar.Add(sortModeMenu);
-            
-            var thumbnailButton = new Button(OnThumbnailToolbarButtonClick) { text = "Thumbnail" };
+
+            var thumbnailButton = new ToolbarButton(OnThumbnailToolbarButtonClick) { text = "Thumbnail" };
             gridToolbar.Add(thumbnailButton);
-            
+
+            gridToolbar.Add(new ToolbarSpacer(){style = {width = 100}});
+
+            var showMaterialsToggle = new Toggle() { text = "Show Materials" };
+            showMaterialsToggle.RegisterValueChangedCallback(evt =>
+            {
+                if (_assetGridManager != null)
+                {
+                    _assetGridManager.ShowMaterials = evt.newValue;
+                    Repaint();
+                }
+            });
+            gridToolbar.Add(showMaterialsToggle);
+
             var assetIMGUIContainer = new IMGUIContainer();
             assetIMGUIContainer.style.flexGrow = 1;
             gridPane.Add(assetIMGUIContainer);
@@ -123,7 +148,7 @@ namespace FavoriteAssetsWindow
             gridFooter.style.borderTopColor = new Color(0,0,0,0.5f);
             gridFooter.style.borderTopWidth = 1;
             gridPane.Add(gridFooter);
-            
+
             var itemPath = new Label { name = "item-path" };
             itemPath.style.flexGrow = 1;
             itemPath.style.overflow = Overflow.Hidden;
@@ -140,14 +165,14 @@ namespace FavoriteAssetsWindow
             var inspectorPane = new VisualElement();
             inspectorPane.style.minWidth = 200;
             contentSplitView.Add(inspectorPane);
-            
+
             var inspectorScrollView = new ScrollView();
             inspectorScrollView.style.flexGrow = 1;
             inspectorScrollView.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 0.5f);
             inspectorPane.Add(inspectorScrollView);
 
             inspectorScrollView.Q("unity-content-container").style.height = new Length(100, LengthUnit.Percent);
-            
+
             var inspectorContentContainer = new VisualElement();
             inspectorContentContainer.style.paddingLeft = 10;
             inspectorContentContainer.style.paddingRight = 10;
@@ -156,7 +181,7 @@ namespace FavoriteAssetsWindow
             inspectorContentContainer.style.flexGrow = 1;
             inspectorScrollView.Add(inspectorContentContainer);
             #endregion
-            
+
             // --- Initialize Managers ---
             _categoryTabsManager = new CategoryTabsManager(this, data, categoryTabsContainer, addCategoryButton);
             HierarchyManager = new HierarchyManager(this, data, hierarchyTreeView);
@@ -166,12 +191,15 @@ namespace FavoriteAssetsWindow
             // --- Register Callbacks & Finalize Setup ---
             HierarchyManager.RegisterCallbacks();
             _assetGridManager.RegisterCallbacks();
-            
+
             var sortMode = (AssetGridManager.SortMode)EditorPrefs.GetInt("AFW_SortMode", (int)AssetGridManager.SortMode.Default);
             _assetGridManager.CurrentSortMode = sortMode;
             sortModeMenu.menu.AppendAction("Default", a => _assetGridManager.CurrentSortMode = AssetGridManager.SortMode.Default, a => _assetGridManager.CurrentSortMode == AssetGridManager.SortMode.Default ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
             sortModeMenu.menu.AppendAction("Alphabetical", a => _assetGridManager.CurrentSortMode = AssetGridManager.SortMode.Alphabetical, a => _assetGridManager.CurrentSortMode == AssetGridManager.SortMode.Alphabetical ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
             sortModeMenu.menu.AppendAction("Type", a => _assetGridManager.CurrentSortMode = AssetGridManager.SortMode.Type, a => _assetGridManager.CurrentSortMode == AssetGridManager.SortMode.Type ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+
+            _assetGridManager.ShowMaterials = EditorPrefs.GetBool(SHOW_MATERIALS_PREFS_KEY, false);
+            showMaterialsToggle.SetValueWithoutNotify(_assetGridManager.ShowMaterials);
 
             LoadData();
             _categoryTabsManager.RebuildCategoryTabs();
@@ -214,9 +242,9 @@ namespace FavoriteAssetsWindow
         public void SaveDataAndRebuildMap()
         {
             SaveData();
-            data.RebuildGuidToNodesMap();
+            FavoriteAssetsIndex.Rebuild(data);
         }
-        
+
         public void ValidateAndRestoreSelection()
         {
             if (data == null || data.Categories.Count == 0) return;
@@ -234,7 +262,7 @@ namespace FavoriteAssetsWindow
                 }
             }
         }
-        
+
         public void SaveFoldoutState() => HierarchyManager?.SaveFoldoutState();
         #endregion
 
@@ -251,7 +279,7 @@ namespace FavoriteAssetsWindow
             _assetGridManager.RebuildAssetGrid(HierarchyManager.SelectedNodes);
             _inspectorManager.UpdateInspectorUI(_assetGridManager.SelectedAssetGuids);
         }
-        
+
         public void OnHierarchyChanged()
         {
             _assetGridManager.RebuildAssetGrid(HierarchyManager.SelectedNodes);
@@ -276,10 +304,8 @@ namespace FavoriteAssetsWindow
                 GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (prefab == null) continue;
 
-                Texture2D thumbnailTexture = ThumbnailController.TakePrefabThumbnail(prefab, settings);
-                if (thumbnailTexture != null)
+                if (ThumbnailController.GenerateAndSaveThumbnail(prefab, settings))
                 {
-                    ThumbnailController.SaveThumbnail(prefab, thumbnailTexture);
                     thumbnailsGenerated = true;
                 }
             }
@@ -290,7 +316,7 @@ namespace FavoriteAssetsWindow
                 Repaint();
             }
         }
-        
+
         private void GenerateThumbnails(IEnumerable<GameObject> prefabs, ThumbnailSettings settings)
         {
             if (prefabs == null || !prefabs.Any()) return;
@@ -299,17 +325,13 @@ namespace FavoriteAssetsWindow
             {
                 if (prefab == null) continue;
 
-                Texture2D thumbnailTexture = ThumbnailController.TakePrefabThumbnail(prefab, settings);
-                if (thumbnailTexture != null)
-                {
-                    ThumbnailController.SaveThumbnail(prefab, thumbnailTexture);
-                }
+                ThumbnailController.GenerateAndSaveThumbnail(prefab, settings);
             }
             SaveData();
             Repaint();
             _inspectorManager.UpdateInspectorUI(_assetGridManager.SelectedAssetGuids);
         }
-        
+
         private void OnThumbnailToolbarButtonClick()
         {
             if (_assetGridManager == null || _assetGridManager.CurrentDisplayGuids.Count == 0)
@@ -340,7 +362,7 @@ namespace FavoriteAssetsWindow
                 EditorUtility.DisplayDialog("No Prefabs", "There are no prefabs in the current view to generate thumbnails for.", "OK");
             }
         }
-        
+
         public void RefreshThumbnailsForSelection()
         {
             if (_assetGridManager == null || _assetGridManager.SelectedAssetGuids.Count == 0) return;

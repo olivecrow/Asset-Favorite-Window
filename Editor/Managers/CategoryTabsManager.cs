@@ -14,7 +14,7 @@ namespace FavoriteAssetsWindow
         private readonly FavoriteAssetsData _data;
         private readonly VisualElement _categoryTabsContainer;
         private readonly Button _addCategoryButton;
-        
+
         private List<Button> _categoryTabButtons = new List<Button>();
         private int _pendingUndoGroupId = -1;
 
@@ -100,9 +100,9 @@ namespace FavoriteAssetsWindow
 
             int newIndex = _data.Categories.Count - 1;
             _window.SaveData();
-            
+
             RebuildCategoryTabs();
-            
+
             SelectCategory(newIndex, true);
             _window.rootVisualElement.schedule.Execute(() => { RenameCategory(newIndex); });
         }
@@ -121,7 +121,7 @@ namespace FavoriteAssetsWindow
                 defaultCategory.RootNodes.Add(new HierarchyNode { Name = "Root" });
                 _data.Categories.Add(defaultCategory);
             }
-            
+
             if (index == _data.LastSelectedCategoryIndex)
                 _data.LastSelectedCategoryIndex = Mathf.Max(0, index - 1);
 

@@ -179,7 +179,7 @@ namespace FavoriteAssetsWindow
             var labelsSpacer = new VisualElement();
             labelsSpacer.style.flexGrow = 1;
             _inspectorContentContainer.Add(labelsSpacer);
-            
+
             var labelsContainer = new VisualElement() { style = { flexDirection = FlexDirection.Row} };
             foreach (var label in AssetDatabase.GetLabels(asset))
             {

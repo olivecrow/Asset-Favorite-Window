@@ -18,7 +18,10 @@ namespace FavoriteAssetsWindow
         private List<string> _currentDisplayGuids = new List<string>();
         private HashSet<string> _selectedAssetGuids = new HashSet<string>();
         private string _lastClickedGuid = null;
-        
+        private bool _isDragging = false;
+
+        public bool ShowMaterials { get; set; } = false;
+
         public enum SortMode
         {
             Default,
@@ -26,7 +29,7 @@ namespace FavoriteAssetsWindow
             Type
         }
         public SortMode CurrentSortMode { get; set; } = SortMode.Default;
-        
+
         private const string ZOOM_PREFS_KEY_PREFIX = "AFW_Zoom_";
 
 
@@ -41,7 +44,7 @@ namespace FavoriteAssetsWindow
             _assetIMGUIContainer = assetIMGUIContainer;
             _itemPath = itemPath;
             _zoomSlider = zoomSlider;
-            
+
             _assetIMGUIContainer.onGUIHandler = OnAssetGridGUI;
         }
 
@@ -49,7 +52,7 @@ namespace FavoriteAssetsWindow
         {
              _zoomSlider.RegisterValueChangedCallback(ChangeThumbnailSize);
         }
-        
+
         void ChangeThumbnailSize(ChangeEvent<float> evt)
         {
             EditorPrefs.SetFloat(ZOOM_PREFS_KEY_PREFIX, evt.newValue);
@@ -83,22 +86,41 @@ namespace FavoriteAssetsWindow
                 case SortMode.Alphabetical: return guids.OrderBy(guid => System.IO.Path.GetFileName(AssetDatabase.GUIDToAssetPath(guid))).ToList();
                 case SortMode.Type: return guids.OrderBy(guid => AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(AssetDatabase.GUIDToAssetPath(guid))?.GetType().Name ?? "").ToList();
                 case SortMode.Default:
-                default: return guids;
+                default:
+                    if (_window.HierarchyManager.CurrentlySelectedNode != null)
+                    {
+                        var nodeGuids = _window.HierarchyManager.CurrentlySelectedNode.AssetGUIDs;
+                        return guids.OrderBy(g => nodeGuids.IndexOf(g)).ToList();
+                    }
+                    return guids;
             }
         }
-        
+
         private void OnAssetGridGUI()
         {
-            if (_window.HierarchyManager.CurrentlySelectedNode == null) return;
+            if (Event.current.type == EventType.Layout)
+            {
+                _isDragging = false;
+            }
+
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Delete)
+            {
+                if (_selectedAssetGuids.Count > 0)
+                {
+                    DeleteSelectedAssets();
+                    Event.current.Use();
+                }
+            }
+
+            if (_window.HierarchyManager.CurrentlySelectedNode == null && (_currentNodes == null || !_currentNodes.Any())) return;
 
             HandleDragDropIntoWindow();
 
             _scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
             DrawAssetGrid();
-            
+
             EditorGUILayout.EndScrollView();
-            
-            // Handle background click to clear selection
+
             if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && GUILayoutUtility.GetRect(0, 0, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)).Contains(Event.current.mousePosition))
             {
                  if(_selectedAssetGuids.Count > 0)
@@ -122,11 +144,11 @@ namespace FavoriteAssetsWindow
                     fontSize = 20,
                     normal = { textColor = Color.gray }
                 };
-                if(_currentNodes.Count > 1)
+                if(_currentNodes != null && _currentNodes.Count > 1)
                 {
                     GUILayout.Label("No assets in the current nodes", style, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
                 }
-                else
+                else if (_currentNodes != null && _currentNodes.Count == 1)
                 {
                     GUILayout.Label($"No assets in the current node '{_currentNodes[0].Name}'", style, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
                 }
@@ -210,10 +232,10 @@ namespace FavoriteAssetsWindow
                 var labelStyle = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft };
                 var assetNameContent = new GUIContent(asset.name);
                 var assetNameSize = labelStyle.CalcSize(assetNameContent);
-                
+
                 Rect nameLabelRect = new Rect(rect.x + 24, rect.y, assetNameSize.x, rect.height);
                 GUI.Label(nameLabelRect, assetNameContent, labelStyle);
-                
+
                 var assetLabels = AssetDatabase.GetLabels(asset);
                 if (assetLabels.Length > 0)
                 {
@@ -223,10 +245,10 @@ namespace FavoriteAssetsWindow
                         alignment = TextAnchor.MiddleCenter,
                         normal = { textColor = Color.white }
                     };
-                    
+
                     float currentX = nameLabelRect.xMax + 8;
                     float labelY = rect.y + (rect.height - 14) / 2;
-                    
+
                     foreach (var labelText in assetLabels)
                     {
                         var labelContent = new GUIContent(labelText);
@@ -238,10 +260,10 @@ namespace FavoriteAssetsWindow
                             break;
 
                         var labelBgRect = new Rect(currentX, labelY, labelSize.x, labelSize.y);
-                        
+
                         EditorGUI.DrawRect(labelBgRect, new Color(0f, 0.3f, 0.5f));
                         GUI.Label(labelBgRect, labelContent, labelGUIStyle);
-                        
+
                         currentX += labelSize.x + 2;
                     }
                 }
@@ -249,13 +271,52 @@ namespace FavoriteAssetsWindow
             else
             {
                 Rect iconRect = new Rect(rect.x + 4, rect.y + 4, size, size);
-                _data.TryGetDetail(asset, out var detail);
-                Texture2D thumbnail = null;
-                if(detail != null) thumbnail = detail.thumbnail;
+                Texture2D thumbnail = ThumbnailController.GetThumbnail(asset);
                 if (thumbnail == null) thumbnail = AssetPreview.GetAssetPreview(asset);
                 if (thumbnail == null) thumbnail = AssetPreview.GetMiniThumbnail(asset);
 
                 if (thumbnail != null) GUI.DrawTexture(iconRect, thumbnail, ScaleMode.ScaleToFit);
+
+                if (ShowMaterials && asset is GameObject prefab)
+                {
+                    var renderers = prefab.GetComponentsInChildren<Renderer>(true);
+                    var materials = renderers.SelectMany(r => r.sharedMaterials).Where(m => m != null).Distinct().ToList();
+
+                    if (materials.Any())
+                    {
+                        float itemHeight = 18f;
+                        int maxItems = Mathf.FloorToInt((iconRect.height - 4) / itemHeight);
+                        int itemsToShowCount = Mathf.Min(materials.Count, maxItems);
+
+                        if (itemsToShowCount > 0)
+                        {
+                            var matLabelStyle = new GUIStyle(EditorStyles.miniLabel)
+                            {
+                                normal = { textColor = new Color(1, 1, 1, 0.5f) }
+                            };
+
+                            float currentY = iconRect.y + 2;
+                            for (int i = 0; i < itemsToShowCount; i++)
+                            {
+                                var material = materials[i];
+                                string materialPath = AssetDatabase.GetAssetPath(material);
+                                Texture2D materialIcon = null;
+                                if (!string.IsNullOrEmpty(materialPath))
+                                {
+                                    materialIcon = AssetDatabase.GetCachedIcon(materialPath) as Texture2D;
+                                }
+
+                                if (materialIcon != null)
+                                {
+                                    GUI.DrawTexture(new Rect(iconRect.x + 4, currentY, 16, 16), materialIcon);
+                                }
+
+                                GUI.Label(new Rect(iconRect.x + 22, currentY, iconRect.width - 26, 16), material.name, matLabelStyle);
+                                currentY += itemHeight;
+                            }
+                        }
+                    }
+                }
 
                 Texture2D miniIcon = AssetDatabase.GetCachedIcon(path) as Texture2D;
                 if (miniIcon != null)
@@ -267,7 +328,7 @@ namespace FavoriteAssetsWindow
                 var labelStyle = new GUIStyle(EditorStyles.miniLabel);
                 labelStyle.alignment = TextAnchor.MiddleLeft;
                 GUI.Label(labelRect, asset.name, labelStyle);
-                
+
                 var assetLabels = AssetDatabase.GetLabels(asset);
                 if (assetLabels.Length > 0)
                 {
@@ -277,10 +338,10 @@ namespace FavoriteAssetsWindow
                         alignment = TextAnchor.MiddleCenter,
                         normal = { textColor = Color.white }
                     };
-                    
+
                     float currentX = rect.x + 4;
                     float labelY = rect.y + size + 28;
-                    
+
                     foreach (var labelText in assetLabels)
                     {
                         var labelContent = new GUIContent(labelText);
@@ -292,10 +353,10 @@ namespace FavoriteAssetsWindow
                             break;
 
                         var labelBgRect = new Rect(currentX, labelY, labelSize.x, labelSize.y);
-                        
+
                         EditorGUI.DrawRect(labelBgRect, new Color(0f, 0.3f, 0.5f));
                         GUI.Label(labelBgRect, labelContent, labelGUIStyle);
-                        
+
                         currentX += labelSize.x + 2;
                     }
                 }
@@ -342,7 +403,7 @@ namespace FavoriteAssetsWindow
                         }
                         else
                         {
-                            if (!_selectedAssetGuids.Contains(guid) || _selectedAssetGuids.Count > 1)
+                            if (!_selectedAssetGuids.Contains(guid))
                             {
                                 _selectedAssetGuids.Clear();
                                 _selectedAssetGuids.Add(guid);
@@ -362,11 +423,33 @@ namespace FavoriteAssetsWindow
                     _window.Repaint();
                 }
 
+                if (evt.type == EventType.MouseUp && evt.button == 0)
+                {
+                    if (!_isDragging && !evt.control && !evt.command && !evt.shift)
+                    {
+                        if (_selectedAssetGuids.Contains(guid) && _selectedAssetGuids.Count > 1)
+                        {
+                            _selectedAssetGuids.Clear();
+                            _selectedAssetGuids.Add(guid);
+                            _lastClickedGuid = guid;
+                            _itemPath.text = path;
+                            _window.OnAssetSelectionChanged();
+                            evt.Use();
+                            _window.Repaint();
+                        }
+                    }
+                }
+
                 if (evt.type == EventType.MouseDrag && evt.button == 0)
                 {
+                    _isDragging = true;
+
                     if (!_selectedAssetGuids.Contains(guid))
                     {
-                        _selectedAssetGuids.Clear();
+                        if (!evt.control && !evt.command && !evt.shift)
+                        {
+                            _selectedAssetGuids.Clear();
+                        }
                         _selectedAssetGuids.Add(guid);
                         _window.OnAssetSelectionChanged();
                         _window.Repaint();
@@ -385,6 +468,14 @@ namespace FavoriteAssetsWindow
 
                     DragAndDrop.objectReferences = objs.ToArray();
                     DragAndDrop.paths = paths.ToArray();
+
+                    var dragData = new Dictionary<string, object>
+                    {
+                        { "sourceNodes", _currentNodes },
+                        { "guids", _selectedAssetGuids.ToList() }
+                    };
+                    DragAndDrop.SetGenericData("AssetGridDragData", dragData);
+
                     DragAndDrop.StartDrag(objs.Count > 1 ? "Multiple Assets" : asset.name);
                     evt.Use();
                 }
@@ -403,7 +494,7 @@ namespace FavoriteAssetsWindow
                 }
             }
         }
-        
+
         private void HandleDragDropIntoWindow()
         {
             Event evt = Event.current;
@@ -425,35 +516,67 @@ namespace FavoriteAssetsWindow
 
         private void AddAssetsToCurrentNode(UnityEngine.Object[] objects)
         {
-            HierarchyNode currentlySelectedNode = _window.HierarchyManager.CurrentlySelectedNode;
-            if (currentlySelectedNode == null || objects.Length == 0) return;
-            
-            bool recordCalled = false;
-            bool dataChanged = false;
-            var addedGuids = new List<string>();
+            if (_currentNodes == null || !_currentNodes.Any() || objects.Length == 0) return;
 
-            foreach (var obj in objects)
+            var targetNode = _currentNodes.First();
+            var guids = objects.Select(o => AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(o)))
+                               .Where(g => !string.IsNullOrEmpty(g)).ToList();
+
+            if (!guids.Any()) return;
+
+            Undo.RecordObject(_data, "Add Assets");
+
+            var guidsToAdd = guids.Where(g => !targetNode.AssetGUIDs.Contains(g)).ToList();
+            if (guidsToAdd.Any())
             {
-                string path = AssetDatabase.GetAssetPath(obj);
-                string guid = AssetDatabase.AssetPathToGUID(path);
-
-                if (!string.IsNullOrEmpty(guid) && !currentlySelectedNode.AssetGUIDs.Contains(guid))
+                targetNode.AssetGUIDs.AddRange(guidsToAdd);
+                _window.SaveDataAndRebuildMap();
+                RebuildAssetGrid(_window.HierarchyManager.SelectedNodes);
+                var thumbnailGuids = new List<string>(guidsToAdd);
+                EditorApplication.delayCall += () =>
                 {
-                    if (!recordCalled) { Undo.RecordObject(_data, "Add Assets"); recordCalled = true; }
-                    currentlySelectedNode.AssetGUIDs.Add(guid);
-                    addedGuids.Add(guid);
-                    dataChanged = true;
+                    if (_window != null)
+                    {
+                        _window.GenerateThumbnailsForGuids(thumbnailGuids);
+                    }
+                };
+            }
+        }
+
+        private void DeleteSelectedAssets()
+        {
+            if (_currentNodes == null || !_currentNodes.Any() || _selectedAssetGuids.Count == 0) return;
+
+            if (!EditorUtility.DisplayDialog("Delete Assets",
+                $"Are you sure you want to remove {_selectedAssetGuids.Count} asset(s) from this favorite list?",
+                "Delete", "Cancel"))
+            {
+                return;
+            }
+
+            Undo.RecordObject(_data, "Delete Asset from AFW");
+
+            bool removed = false;
+            foreach (var node in _currentNodes)
+            {
+                int countBefore = node.AssetGUIDs.Count;
+                node.AssetGUIDs.RemoveAll(_selectedAssetGuids.Contains);
+                if (node.AssetGUIDs.Count != countBefore)
+                {
+                    removed = true;
                 }
             }
 
-            if (dataChanged)
+            if (removed)
             {
+                _selectedAssetGuids.Clear();
+                _lastClickedGuid = null;
                 _window.SaveDataAndRebuildMap();
                 RebuildAssetGrid(_window.HierarchyManager.SelectedNodes);
-                _window.GenerateThumbnailsForGuids(addedGuids);
+                _window.OnAssetSelectionChanged();
             }
         }
-        
+
         private void ShowAssetContextMenu(UnityEngine.Object asset, string path, string guid)
         {
             var menu = new GenericMenu();
@@ -464,7 +587,26 @@ namespace FavoriteAssetsWindow
             menu.AddItem(new GUIContent("Copy Path"), false, () => GUIUtility.systemCopyBuffer = path);
             menu.AddItem(new GUIContent("Copy GUID"), false, () => GUIUtility.systemCopyBuffer = guid);
             menu.AddSeparator("");
-            
+
+            bool isDefaultSort = CurrentSortMode == SortMode.Default;
+
+            if (isDefaultSort)
+            {
+                menu.AddItem(new GUIContent("Move Up"), false, () => MoveSelectedAssets(-1));
+                menu.AddItem(new GUIContent("Move Down"), false, () => MoveSelectedAssets(1));
+                menu.AddItem(new GUIContent("Move to Top"), false, () => MoveSelectedAssetsToTop());
+                menu.AddItem(new GUIContent("Move to Bottom"), false, () => MoveSelectedAssetsToBottom());
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Move Up"));
+                menu.AddDisabledItem(new GUIContent("Move Down"));
+                menu.AddDisabledItem(new GUIContent("Move to Top"));
+                menu.AddDisabledItem(new GUIContent("Move to Bottom"));
+            }
+
+            menu.AddSeparator("");
+
             bool canRefresh = _selectedAssetGuids
                 .Select(g => AssetDatabase.GUIDToAssetPath(g))
                 .Any(p => AssetDatabase.LoadAssetAtPath<GameObject>(p) != null);
@@ -474,33 +616,94 @@ namespace FavoriteAssetsWindow
             else
                 menu.AddDisabledItem(new GUIContent("Refresh Thumbnail(s)"));
 
-            menu.AddItem(new GUIContent("Delete"), false, () =>
-            {
-                bool removed = false;
-                Undo.RecordObject(_data, "Delete Asset from AFW");
-                
-                HierarchyNode currentlySelectedNode = _window.HierarchyManager.CurrentlySelectedNode;
-                if(currentlySelectedNode == null) return;
-
-                foreach(var selectedGuid in _selectedAssetGuids)
-                {
-                    if (currentlySelectedNode.AssetGUIDs.Contains(selectedGuid))
-                    {
-                        currentlySelectedNode.AssetGUIDs.Remove(selectedGuid);
-                        removed = true;
-                    }
-                }
-                if (removed)
-                {
-                    _selectedAssetGuids.Clear();
-                    _window.SaveDataAndRebuildMap();
-                    RebuildAssetGrid(_window.HierarchyManager.SelectedNodes);
-                    _window.OnAssetSelectionChanged();
-                }
-            });
+            menu.AddItem(new GUIContent("Delete"), false, DeleteSelectedAssets);
 
             menu.AddItem(new GUIContent("Properties..."), false, () => EditorUtility.OpenPropertyEditor(asset));
             menu.ShowAsContext();
+        }
+
+        private void MoveSelectedAssets(int direction)
+        {
+            if (_currentNodes == null || _currentNodes.Count != 1) return;
+            var currentlySelectedNode = _currentNodes.First();
+            if (currentlySelectedNode == null || _selectedAssetGuids.Count == 0) return;
+
+            Undo.RecordObject(_data, "Move Assets");
+
+            var guids = currentlySelectedNode.AssetGUIDs;
+            var selected = _selectedAssetGuids.OrderBy(guids.IndexOf).ToList();
+
+            if (direction < 0) // Move Up
+            {
+                for (int i = 0; i < selected.Count; i++)
+                {
+                    int index = guids.IndexOf(selected[i]);
+                    if (index > 0 && !guids.Take(index).Except(selected).Any()) continue;
+                    if (index > 0)
+                    {
+                        string temp = guids[index - 1];
+                        guids[index - 1] = guids[index];
+                        guids[index] = temp;
+                    }
+                }
+            }
+            else // Move Down
+            {
+                for (int i = selected.Count - 1; i >= 0; i--)
+                {
+                    int index = guids.IndexOf(selected[i]);
+                    if (index < guids.Count - 1 && !guids.Skip(index + 1).Except(selected).Any()) continue;
+                    if (index < guids.Count - 1)
+                    {
+                        string temp = guids[index + 1];
+                        guids[index + 1] = guids[index];
+                        guids[index] = temp;
+                    }
+                }
+            }
+
+            _window.SaveDataAndRebuildMap();
+            RebuildAssetGrid(_window.HierarchyManager.SelectedNodes);
+        }
+
+        private void MoveSelectedAssetsToTop()
+        {
+            if (_currentNodes == null || _currentNodes.Count != 1) return;
+            var currentlySelectedNode = _currentNodes.First();
+            if (currentlySelectedNode == null || _selectedAssetGuids.Count == 0) return;
+
+            Undo.RecordObject(_data, "Move Assets to Top");
+
+            var guids = currentlySelectedNode.AssetGUIDs;
+            var selected = _selectedAssetGuids.OrderBy(guids.IndexOf).ToList();
+            var others = guids.Except(selected).ToList();
+
+            guids.Clear();
+            guids.AddRange(selected);
+            guids.AddRange(others);
+
+            _window.SaveDataAndRebuildMap();
+            RebuildAssetGrid(_window.HierarchyManager.SelectedNodes);
+        }
+
+        private void MoveSelectedAssetsToBottom()
+        {
+            if (_currentNodes == null || _currentNodes.Count != 1) return;
+            var currentlySelectedNode = _currentNodes.First();
+            if (currentlySelectedNode == null || _selectedAssetGuids.Count == 0) return;
+
+            Undo.RecordObject(_data, "Move Assets to Bottom");
+
+            var guids = currentlySelectedNode.AssetGUIDs;
+            var selected = _selectedAssetGuids.OrderBy(guids.IndexOf).ToList();
+            var others = guids.Except(selected).ToList();
+
+            guids.Clear();
+            guids.AddRange(others);
+            guids.AddRange(selected);
+
+            _window.SaveDataAndRebuildMap();
+            RebuildAssetGrid(_window.HierarchyManager.SelectedNodes);
         }
     }
 }

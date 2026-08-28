@@ -213,7 +213,7 @@ namespace FavoriteAssetsWindow
                     Debug.LogWarning($"There is an empty key | index : {i} | Value : {pairs[i].Value}");
                     continue;
                 }
-                
+
                 if (pairs[i].Key.Equals(key))
                 {
                     value = pairs[i].Value;
@@ -225,13 +225,13 @@ namespace FavoriteAssetsWindow
             return false;
         }
     }
-    
+
     [Serializable]
     public class KVPair<TKey, TValue>
     {
         public TKey Key;
         public TValue Value;
-        
+
 
         public KVPair(TKey key, TValue value)
         {

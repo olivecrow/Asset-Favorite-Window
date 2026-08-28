@@ -16,13 +16,15 @@ namespace FavoriteAssetsWindow
             window._onConfirm = onConfirm;
             window._settings = ThumbnailSettings.LoadFromEditorPrefs();
             window._saveOnConfirm = saveOnConfirm;
+            window.minSize = new Vector2(350, saveOnConfirm ? 380 : 350);
+            window.maxSize = window.minSize;
             window.ShowModalUtility();
-            window.minSize = new Vector2(350, 350);
-            window.maxSize = new Vector2(350, 350);
         }
 
         private void OnGUI()
         {
+            _settings ??= ThumbnailSettings.LoadFromEditorPrefs();
+
             EditorGUILayout.LabelField("Thumbnail Generation Settings", EditorStyles.boldLabel);
             EditorGUILayout.Space();
 
@@ -32,10 +34,19 @@ namespace FavoriteAssetsWindow
             _settings.ThumbnailSize = EditorGUILayout.Vector2IntField("Thumbnail Size", _settings.ThumbnailSize);
             _settings.ObjectRotation = EditorGUILayout.Vector3Field("Object Rotation", _settings.ObjectRotation);
             _settings.CameraFOV = EditorGUILayout.FloatField("Camera FOV", _settings.CameraFOV);
-            
+
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Camera", EditorStyles.boldLabel);
             _settings.CameraOffset = EditorGUILayout.Vector3Field("Camera Offset", _settings.CameraOffset);
+
+            if (_saveOnConfirm)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Behavior", EditorStyles.boldLabel);
+                _settings.AutoRefreshOnImport = EditorGUILayout.Toggle(
+                    "Refresh On Prefab Import",
+                    _settings.AutoRefreshOnImport);
+            }
 
             EditorGUILayout.Space();
 
@@ -45,8 +56,11 @@ namespace FavoriteAssetsWindow
                 {
                     _settings.SaveToEditorPrefs();
                 }
-                _onConfirm?.Invoke(_settings);
+
+                var settings = _settings;
+                var onConfirm = _onConfirm;
                 Close();
+                EditorApplication.delayCall += () => onConfirm?.Invoke(settings);
             }
 
             if (GUILayout.Button("Cancel"))
