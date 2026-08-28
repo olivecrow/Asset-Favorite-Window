@@ -2,7 +2,7 @@
   "name": "com.olivecrow.asset-favorite-window",
   "version": "0.1.0",
   "displayName": "Asset Favorite Window",
-  "description": "카테고리와 계층으로 프로젝트 에셋을 정리하고 프리팹 썸네일을 관리하는 Unity Editor 도구입니다.",
+  "description": "A Unity Editor tool for organizing project assets into categories and hierarchies and managing prefab thumbnails.",
   "unity": "6000.3",
   "type": "tool",
   "author": {

@@ -1,43 +1,46 @@
 # Asset Favorite Window
 
-프로젝트 에셋을 카테고리와 계층 노드로 정리하고, 전용 Editor 창에서 빠르게 선택하거나 프리팹 썸네일을 관리하는 UPM 패키지입니다.
+[English](README.md) | [한국어](README.ko.md)
 
-## 설치
+A Unity Package Manager package for organizing project assets into categories and hierarchical nodes, quickly selecting them from a dedicated Editor window, and managing prefab thumbnails.
 
-Unity Package Manager의 **Install package from git URL**에 다음 주소를 입력합니다.
+## Installation
+
+In Unity Package Manager, select **Install package from git URL** and enter:
 
 ```text
 https://github.com/olivecrow/Asset-Favorite-Window.git#v0.1.0
 ```
 
-저장소를 직접 내려받은 경우 `package.json`을 지정해 로컬 패키지로 설치할 수도 있습니다.
+If you cloned the repository directly, you can also select its `package.json` to install it as a local package.
 
-## 사용 방법
+## Usage
 
-1. `Window > Favorite Assets`를 열거나 `Shift+W` 단축키를 사용합니다.
-2. 카테고리와 계층 노드를 만들고 Project View의 에셋을 원하는 노드에 등록합니다.
-3. 그리드에서 에셋을 선택하거나 프리팹 썸네일을 생성·갱신합니다.
+1. Open `Window > Favorite Assets` or press `Shift+W`.
+2. Create categories and hierarchical nodes, then add assets from the Project window to the desired node.
+3. Select assets from the grid, or generate and refresh prefab thumbnails.
 
-## 데이터와 캐시
+## Data and Cache
 
-- 패키지 저장소 자체에는 소비 프로젝트의 즐겨찾기 데이터나 생성 썸네일을 포함하지 않습니다.
-- 공유할 즐겨찾기 구조와 에셋 GUID는 소비 프로젝트의 `ProjectSettings/FavoriteAssetsData.asset`에 저장됩니다.
-- 사용자별 UI와 썸네일 설정은 `EditorPrefs`에 저장됩니다.
-- 생성한 썸네일은 소비 프로젝트의 `Library/AssetFavoriteWindow/Thumbnails`에 PNG 캐시로 저장되며 Git에 포함하지 않습니다.
-- 이전 `Assets/Editor/FavoriteAssetsThumbnails`의 `.asset` 썸네일 참조는 창에서 처음 사용될 때 PNG 캐시로 복사되고 프로젝트 설정의 기존 참조가 제거됩니다.
+- The package repository does not include favorite data or generated thumbnails from any consuming project.
+- Shared favorite structures and asset GUIDs are stored in `ProjectSettings/FavoriteAssetsData.asset` in the consuming project.
+- Per-user UI and thumbnail preferences are stored in `EditorPrefs`.
+- Generated thumbnails are stored as a local PNG cache under `Library/AssetFavoriteWindow/Thumbnails` and should not be committed to Git.
+- Legacy `.asset` thumbnail references under `Assets/Editor/FavoriteAssetsThumbnails` are copied to the PNG cache when first used, and their old references are then removed from the project settings data.
 
-## 의존성과 호환성
+## Dependencies and Compatibility
 
-- `FavoriteAssetsWindow` 어셈블리는 Editor 전용이며 명시적인 외부 assembly reference가 없습니다.
-- Built-in, URP, HDRP에서 공통으로 사용할 수 있도록 1x MSAA preview target을 사용합니다.
-- 현재 기준 Unity 버전은 `6000.3`입니다. 다른 Unity 버전의 호환성은 해당 버전에서 별도로 확인해야 합니다.
+- The `FavoriteAssetsWindow` assembly is Editor-only and has no explicit external assembly references.
+- A 1x MSAA preview target is used for compatibility across the Built-in Render Pipeline, URP, and HDRP.
+- The currently supported Unity version is `6000.3`. Compatibility with other Unity versions should be verified separately.
 
-## 개발과 검증
+## Development and Validation
 
-- Editor 테스트는 `Tests/Editor`에 있습니다.
-- 패키지 변경 후에는 Unity 컴파일, EditMode 테스트, 창 재실행, Undo/Redo, 에셋 이동·삭제, 프리팹 재import와 썸네일 갱신을 확인합니다.
-- 상세 구조는 [패키지 문서](Documentation~/index.md)를 참고합니다.
+- Editor tests are located under `Tests/Editor`.
+- After changing the package, verify Unity compilation, EditMode tests, window reopening, Undo/Redo, asset moves and deletions, prefab reimport, and thumbnail refresh.
+- See the [package documentation](Documentation~/index.md) for the package structure and constraints.
+- See the [changelog](CHANGELOG.md) for release history.
 
-## 라이선스
+## License
 
-MIT License입니다. 자세한 내용은 [LICENSE.md](LICENSE.md)를 참고합니다.
+This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for details.
